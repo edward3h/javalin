@@ -49,10 +49,6 @@ class JavalinServlet(val config: JavalinConfig) : HttpServlet() {
                 if (type == HandlerType.HEAD && hasGetHandlerMapped(requestUri)) {
                     return@tryWithExceptionMapper // return 200, there is a get handler
                 }
-                if (type == HandlerType.HEAD || type == HandlerType.GET) { // let Jetty check for static resources (will write response if found)
-                    if (config.inner.resourceHandler?.handle(req, JavalinResponseWrapper(res, rwc)) == true) return@tryWithExceptionMapper
-                    if (config.inner.singlePageHandler.handle(ctx)) return@tryWithExceptionMapper
-                }
                 if (type == HandlerType.OPTIONS && isCorsEnabled(config)) { // CORS is enabled, so we return 200 for OPTIONS
                     return@tryWithExceptionMapper
                 }

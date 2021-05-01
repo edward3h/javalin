@@ -12,7 +12,6 @@ import io.javalin.http.JavalinResponseWrapper
 import org.eclipse.jetty.server.Request
 import org.eclipse.jetty.server.handler.ResourceHandler
 import org.eclipse.jetty.util.URIUtil
-import org.eclipse.jetty.util.resource.EmptyResource
 import org.eclipse.jetty.util.resource.Resource
 import java.io.File
 import java.nio.file.AccessDeniedException
@@ -60,24 +59,25 @@ class JettyResourceHandler : JavalinResourceHandler {
         return false
     }
 
-    private fun Resource?.isFile() = this != null && this.exists() && !this.isDirectory
-
-    private fun Resource?.isDirectoryWithWelcomeFile(handler: ResourceHandler, target: String) =
-            this != null && this.isDirectory && handler.getResource("${target.removeSuffix("/")}/index.html")?.exists() == true
 }
+
+fun Resource?.isFile() = this != null && this.exists() && !this.isDirectory
+
+fun Resource?.isDirectoryWithWelcomeFile(handler: ResourceHandler, target: String) =
+        this != null && this.isDirectory && handler.getResource("${target.removeSuffix("/")}/index.html")?.exists() == true
 
 private class WebjarHandler(config: StaticFileConfig) : ConfigResourceHandler(config) {
     override fun getResource(path: String) = Resource.newClassPathResource("META-INF/resources$path") ?: super.getResource(path)
 }
 
-private open class PrefixableHandler(config: StaticFileConfig) : ConfigResourceHandler(config) {
+open class PrefixableHandler(config: StaticFileConfig) : ConfigResourceHandler(config) {
 
     init {
         resourceBase = getResourceBase(config)
         isDirAllowed = false
         isEtags = true
         Javalin.log?.info("""Static file handler added:
-        |    {urlPathPrefix: "${config.urlPathPrefix}", path: "${config.directory}", location: Location.${config.location}}
+        |    {directory: "${config.directory}", location: Location.${config.location}}
         |    Resolved path: '${getResourceBase(config)}'
         """.trimMargin())
     }
@@ -93,21 +93,9 @@ private open class PrefixableHandler(config: StaticFileConfig) : ConfigResourceH
         }
         return config.directory
     }
-
-    override fun getResource(path: String): Resource {
-        val targetResource by lazy { path.removePrefix(config.urlPathPrefix) }
-        return when {
-            config.urlPathPrefix == "/" -> super.getResource(path)!! // same as regular ResourceHandler
-            targetResource == "" -> super.getResource("/")!! // directory without trailing '/'
-            !path.startsWith(config.urlPathPrefix) -> EmptyResource.INSTANCE
-            !targetResource.startsWith("/") -> EmptyResource.INSTANCE
-            else -> super.getResource(targetResource)!!
-        }
-    }
-
 }
 
-private class AliasHandler(config: StaticFileConfig) : PrefixableHandler(config) {
+class AliasHandler(config: StaticFileConfig) : PrefixableHandler(config) {
     override fun getResource(path: String): Resource {  // if this method throws, we get a 404
         val resource = baseResource?.addPath(URIUtil.canonicalPath(path))!!
         if (!resource.isAlias) return super.getResource(path) // treat as prefixablehandler

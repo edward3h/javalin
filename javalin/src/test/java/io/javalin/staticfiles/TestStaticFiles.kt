@@ -11,8 +11,8 @@ import io.javalin.Javalin
 import io.javalin.core.util.Header
 import io.javalin.core.util.OptionalDependency
 import io.javalin.http.UnauthorizedResponse
+import io.javalin.http.staticfiles.Handlers
 import io.javalin.http.staticfiles.Location
-import io.javalin.http.staticfiles.StaticFileConfig
 import io.javalin.testing.TestLoggingUtil
 import io.javalin.testing.TestUtil
 import org.assertj.core.api.Assertions.assertThat
@@ -34,8 +34,8 @@ import javax.servlet.ServletResponse
 
 class TestStaticFiles {
 
-    private val defaultStaticResourceApp: Javalin by lazy { Javalin.create { it.addStaticFiles("/public", Location.CLASSPATH) } }
-    private val externalStaticResourceApp: Javalin by lazy { Javalin.create { it.addStaticFiles("src/test/external/", Location.EXTERNAL) } }
+    private val defaultStaticResourceApp: Javalin by lazy { Javalin.create().get("/*", Handlers.staticFiles("/public", Location.CLASSPATH)) }
+    private val externalStaticResourceApp: Javalin by lazy { Javalin.create().get("/*", Handlers.staticFiles("src/test/external/", Location.EXTERNAL)) }
     private val multiLocationStaticResourceApp: Javalin by lazy {
         Javalin.create {
             it.addStaticFiles("src/test/external/", Location.EXTERNAL)
@@ -44,7 +44,7 @@ class TestStaticFiles {
             it.addStaticFiles("/public/subdir", Location.CLASSPATH)
         }
     }
-    private val customHeaderApp: Javalin by lazy { Javalin.create { it.addStaticFiles{ it.headers = mapOf(Header.CACHE_CONTROL to "max-age=31622400")} } }
+    private val customHeaderApp: Javalin by lazy { Javalin.create { it.addStaticFiles { it.headers = mapOf(Header.CACHE_CONTROL to "max-age=31622400") } } }
     private val devLoggingApp: Javalin by lazy {
         Javalin.create {
             it.enableDevLogging()
@@ -88,19 +88,15 @@ class TestStaticFiles {
 
     @Test
     fun `alias checks for static files should work`() {
+        val aliasCheck = ContextHandler.AliasCheck { path, resource -> !path.endsWith(".txt") }
         val staticWithAliasResourceApp = Javalin.create {
-            // block aliases for txt files
-            val aliasCheck = ContextHandler.AliasCheck { path, resource -> !path.endsWith(".txt") }
-            it.addStaticFiles {
-                it.aliasCheck = aliasCheck
-                it.directory = "src/test/external/"
-                it.location = Location.EXTERNAL
-            }
-            it.addStaticFiles {
-                it.urlPathPrefix = "/url-prefix"
-                it.aliasCheck = aliasCheck
-            }
-        }
+        }.get("/url-prefix/*", Handlers.staticFiles {
+            it.aliasCheck = aliasCheck
+        }).get("/*", Handlers.staticFiles {
+            it.aliasCheck = aliasCheck
+            it.directory = "src/test/external/"
+            it.location = Location.EXTERNAL
+        })
 
         val createdHtml = createSymLink("src/test/external/html.html", "src/test/external/linked_html.html")
         if (createdHtml != null) {
@@ -231,12 +227,10 @@ class TestStaticFiles {
     fun `serving from custom url path works`() {
         TestUtil.test(Javalin.create { servlet ->
             servlet.addStaticFiles("/public", Location.CLASSPATH)
-            servlet.addStaticFiles {
-                it.urlPathPrefix = "/url-prefix"
-                it.directory = "/public"
-                it.location = Location.CLASSPATH
-            }
-        }) { _, http ->
+        }.get("/url-prefix/*", Handlers.staticFiles {
+            it.directory = "/public"
+            it.location = Location.CLASSPATH
+        })) { _, http ->
             assertThat(http.get("/styles.css").status).isEqualTo(200)
             assertThat(http.get("/url-prefix/styles.css").status).isEqualTo(200)
         }
@@ -247,12 +241,10 @@ class TestStaticFiles {
         TestUtil.test(Javalin.create { servlet ->
             // effectively equivalent to servlet.addStaticFiles("/public", Location.CLASSPATH)
             // but with benefit of additional "filtering": only requests matching /assets/* will be matched against static resources handler
-            servlet.addStaticFiles {
-                it.urlPathPrefix = "/assets"
-                it.directory = "/public/assets"
-                it.location = Location.CLASSPATH
-            }
-        }) { _, http ->
+        }.get("/assets/*", Handlers.staticFiles {
+            it.directory = "/public/assets"
+            it.location = Location.CLASSPATH
+        })) { _, http ->
             assertThat(http.get("/assets/filtered-styles.css").status).isEqualTo(200) // access to urls matching /assets/* is allowed
             assertThat(http.get("/filtered-styles.css").status).isEqualTo(404) // direct access to a file in the subfolder is not allowed
             assertThat(http.get("/styles.css").status).isEqualTo(404) // access to other locations in /public is not allowed

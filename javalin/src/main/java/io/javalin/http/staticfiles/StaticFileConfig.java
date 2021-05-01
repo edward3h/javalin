@@ -9,11 +9,10 @@ import static java.util.stream.Collectors.toMap;
 
 public class StaticFileConfig {
     // @formatter:off
-    public @NotNull String urlPathPrefix = "/";
     public @NotNull String directory = "/public";
     public @NotNull Location location = Location.CLASSPATH;
+    public @NotNull Map<String, String> headers = Stream.of("").collect(toMap(x -> Header.CACHE_CONTROL, x -> "max-age=0")); // mapOf(Header.CACHE_CONTROL to "max-age=0")
     public boolean precompress = false;
     public ContextHandler.AliasCheck aliasCheck = null;
-    public Map<String, String> headers = Stream.of("").collect(toMap(x -> Header.CACHE_CONTROL, x -> "max-age=0")); // mapOf(Header.CACHE_CONTROL to "max-age=0")
     // @formatter:on
 }
